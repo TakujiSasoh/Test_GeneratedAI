@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ブラウザ横スクロールアクションゲーム</title>
+    <style>
+        canvas {
+            border: 1px solid black;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="800" height="400"></canvas>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // プレイヤーの設定
+        const player = {
+            x: 50,
+            y: 200,
+            width: 32,
+            height: 32,
+            speed: 5,
+            jumpForce: 10,
+            velocity: 0,
+            isJumping: false
+        };
+
+        // 地面の設定
+        const ground = {
+            y: 350,
+            height: 50
+        };
+
+        // キー入力の状態
+        const keys = {};
+
+        // ゲームループ
+        function gameLoop() {
+            // 画面をクリア
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // プレイヤーの移動
+            if (keys.ArrowRight) {
+                player.x += player.speed;
+            }
+            if (keys.ArrowLeft) {
+                player.x -= player.speed;
+            }
+
+            // ジャンプの処理
+            if (keys.Space && !player.isJumping) {
+                player.velocity = -player.jumpForce;
+                player.isJumping = true;
+            }
+
+            // 重力の適用
+            player.velocity += 0.5;
+            player.y += player.velocity;
+
+            // 地面との衝突判定
+            if (player.y + player.height > ground.y) {
+                player.y = ground.y - player.height;
+                player.velocity = 0;
+                player.isJumping = false;
+            }
+
+            // プレイヤーの描画
+            ctx.fillStyle = 'red';
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+
+            // 地面の描画
+            ctx.fillStyle = 'green';
+            ctx.fillRect(0, ground.y, canvas.width, ground.height);
+
+            // 次のフレームを要求
+            requestAnimationFrame(gameLoop);
+        }
+
+        // キーイベントの設定
+        window.addEventListener('keydown', (e) => {
+            keys[e.code] = true;
+        });
+
+        window.addEventListener('keyup', (e) => {
+            keys[e.code] = false;
+        });
+
+        // ゲームの開始
+        gameLoop();
+    </script>
+</body>
+</html>

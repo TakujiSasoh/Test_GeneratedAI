@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>宇宙テーマ完全版ボールゲーム</title>
+    <style>
+        body {
+            background-color: #000;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+            color: white;
+        }
+        #gameCanvas {
+            background-image: url('https://sozaino.site/wp-content/uploads/2021/02/utyuu-1536x864.jpg');
+            background-size: cover;
+            background-position: center;
+            display: block;
+            margin: 20px auto;
+        }
+        #score, #highScore, #level {
+            text-align: center;
+            font-size: 24px;
+            margin-top: 10px;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="480" height="640"></canvas>
+    <div id="score">スコア: 0</div>
+    <div id="highScore">ハイスコア: 0</div>
+    <div id="level">レベル: 1</div>
+    <audio id="explosionSound" src="https://taira-komori.jpn.org/sound/sf/mp3/rocket1.mp3"></audio>
+    <audio id="bounceSound" src="https://taira-komori.jpn.org/sound/sf/mp3/laser1.mp3"></audio>
+    <audio id="powerUpSound" src="https://taira-komori.jpn.org/sound/sf/mp3/warp1.mp3"></audio>
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        let x = canvas.width / 2;
+        let y = canvas.height - 30;
+        let dx = 2;
+        let dy = -2;
+        const ballRadius = 10;
+        let paddleHeight = 20;
+        let paddleWidth = 75;
+        let paddleX = (canvas.width - paddleWidth) / 2;
+        let rightPressed = false;
+        let leftPressed = false;
+        let score = 0;
+        let highScore = 0;
+        let level = 1;
+        let gameIsOver = false;
+        let waitingForRestart = false;
+        const explosionSound = document.getElementById("explosionSound");
+        const bounceSound = document.getElementById("bounceSound");
+        const powerUpSound = document.getElementById("powerUpSound");
+
+        // 星の設定
+        const stars = [];
+        const starCount = 50;
+
+        // 惑星の設定
+        const planet = {
+            x: canvas.width * 0.8,
+            y: canvas.height * 0.2,
+            radius: 60,
+            color: "#FF6347"
+        };
+
+        // ブロックの設定
+        const brickRowCount = 5;
+        const brickColumnCount = 5;
+        const brickWidth = 75;
+        const brickHeight = 20;
+        const brickPadding = 10;
+        const brickOffsetTop = 30;
+        const brickOffsetLeft = 30;
+
+        const bricks = [];
+        
+        // パワーアップアイテム
+        let powerUp = { x: 0, y: 0, status: 0, type: 0 };
+
+        // 星を初期化
+        for (let i = 0; i < starCount; i++) {
+            stars.push({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height,
+                size: Math.random() * 2,
+                speed: Math.random() * 0.5 + 0.1
+            });
+        }
+
+        document.addEventListener("keydown", keyDownHandler, false);
+        document.addEventListener("keyup", keyUpHandler, false);
+
+        function keyDownHandler(e) {
+            if (e.key === "Right" || e.key === "ArrowRight") {
+                rightPressed = true;
+            } else if (e.key === "Left" || e.key === "ArrowLeft") {
+                leftPressed = true;
+            } else if (e.key === " " && waitingForRestart) {
+                restartGame();
+            }
+        }
+
+        function keyUpHandler(e) {
+            if (e.key === "Right" || e.key === "ArrowRight") {
+                rightPressed = false;
+            } else if (e.key === "Left" || e.key === "ArrowLeft") {
+                leftPressed = false;
+            }
+        }
+
+        function drawBall() {
+            ctx.beginPath();
+            ctx.arc(x, y, ballRadius, 0, Math.PI * 2);
+            ctx.fillStyle = "#A9A9A9";
+            ctx.fill();
+            ctx.closePath();
+
+            ctx.beginPath();
+            ctx.arc(x - 3, y - 3, ballRadius / 3, 0, Math.PI * 2);
+            ctx.fillStyle = "#696969";
+            ctx.fill();
+            ctx.closePath();
+        }
+
+        function drawPaddle() {
+            ctx.save();
+            ctx.translate(paddleX, canvas.height - paddleHeight);
+            
+            ctx.beginPath();
+            ctx.moveTo(0, paddleHeight);
+            ctx.lineTo(paddleWidth / 2, 0);
+            ctx.lineTo(paddleWidth, paddleHeight);
+            ctx.closePath();
+            ctx.fillStyle = "#4169E1";
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.moveTo(paddleWidth * 0.4, paddleHeight * 0.6);
+            ctx.lineTo(paddleWidth / 2, paddleHeight * 0.2);
+            ctx.lineTo(paddleWidth * 0.6, paddleHeight * 0.6);
+            ctx.closePath();
+            ctx.fillStyle = "#00FFFF";
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.moveTo(paddleWidth * 0.3, paddleHeight);
+            ctx.lineTo(paddleWidth * 0.4, paddleHeight + 5);
+            ctx.lineTo(paddleWidth * 0.6, paddleHeight + 5);
+            ctx.lineTo(paddleWidth * 0.7, paddleHeight);
+            ctx.closePath();
+            ctx.fillStyle = "#FF4500";
+            ctx.fill();
+
+            ctx.restore();
+        }
+
+        function drawBricks() {
+            for(let c=0; c<brickColumnCount; c++) {
+                for(let r=0; r<brickRowCount; r++) {
+                    if(bricks[c][r].status == 1) {
+                        const brickX = (c*(brickWidth+brickPadding))+brickOffsetLeft;
+                        const brickY = (r*(brickHeight+brickPadding))+brickOffsetTop;
+                        bricks[c][r].x = brickX;
+                        bricks[c][r].y = brickY;
+                        
+                        ctx.beginPath();
+                        ctx.moveTo(brickX, brickY + brickHeight/2);
+                        ctx.lineTo(brickX + brickWidth/4, brickY);
+                        ctx.lineTo(brickX + brickWidth*3/4, brickY);
+                        ctx.lineTo(brickX + brickWidth, brickY + brickHeight/2);
+                        ctx.lineTo(brickX + brickWidth*3/4, brickY + brickHeight);
+                        ctx.lineTo(brickX + brickWidth/4, brickY + brickHeight);
+                        ctx.closePath();
+                        ctx.fillStyle = "#8B4513";
+                        ctx.fill();
+                        ctx.strokeStyle = "#A0522D";
+                        ctx.stroke();
+                    }
+                }
+            }
+        }
+
+        function drawPowerUp() {
+            if(powerUp.status == 1) {
+                ctx.beginPath();
+                ctx.moveTo(powerUp.x, powerUp.y + 10);
+                ctx.lineTo(powerUp.x + 10, powerUp.y - 10);
+                ctx.lineTo(powerUp.x + 20, powerUp.y + 10);
+                ctx.lineTo(powerUp.x + 10, powerUp.y + 5);
+                ctx.closePath();
+                ctx.fillStyle = powerUp.type == 0 ? "#7FFF00" : "#FF1493";
+                ctx.fill();
+            }
+        }
+
+        function drawStars() {
+            ctx.fillStyle = "white";
+            for (let star of stars) {
+                ctx.beginPath();
+                ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function drawPlanet() {
+            ctx.beginPath();
+            ctx.arc(planet.x, planet.y, planet.radius, 0, Math.PI * 2);
+            ctx.fillStyle = planet.color;
+            ctx.fill();
+            ctx.closePath();
+
+            // 惑星の模様を追加
+            ctx.beginPath();
+            ctx.arc(planet.x - 20, planet.y - 10, planet.radius / 3, 0, Math.PI * 2);
+            ctx.fillStyle = "#FF4500";
+            ctx.fill();
+            ctx.closePath();
+        }
+
+        function updateStars() {
+            for (let star of stars) {
+                star.y += star.speed;
+                if (star.y > canvas.height) {
+                    star.y = 0;
+                    star.x = Math.random() * canvas.width;
+                }
+            }
+        }
+
+        function updateScore() {
+            document.getElementById("score").innerHTML = "スコア: " + score;
+            document.getElementById("highScore").innerHTML = "ハイスコア: " + highScore;
+            document.getElementById("level").innerHTML = "レベル: " + level;
+        }
+
+        function collisionDetection() {
+            for(let c=0; c<brickColumnCount; c++) {
+                for(let r=0; r<brickRowCount; r++) {
+                    const b = bricks[c][r];
+                    if(b.status == 1) {
+                        if(x > b.x && x < b.x+brickWidth && y > b.y && y < b.y+brickHeight) {
+                            dy = -dy;
+                            b.status = 0;
+                            score += 10;
+                            if(score > highScore) {
+                                highScore = score;
+                            }
+                            updateScore();
+                            if(Math.random() < 0.1) {
+                                powerUp.x = b.x;
+                                powerUp.y = b.y;
+                                powerUp.status = 1;
+                                powerUp.type = Math.random() < 0.5 ? 0 : 1;
+                            }
+                            if(score % 50 == 0) {
+                                level++;
+                                if(level <= 5) {
+                                    resetBricks();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        function resetBricks() {
+            for(let c=0; c<brickColumnCount; c++) {
+                bricks[c] = [];
+                for(let r=0; r<brickRowCount; r++) {
+                    bricks[c][r] = { x: 0, y: 0, status: 1 };
+                }
+            }
+            // レベルに応じてブロックの配置を変更
+            if(level % 2 == 0) {
+                for(let c=0; c<brickColumnCount; c++) {
+                    bricks[c][brickRowCount-1].status = 0;
+                }
+            }
+        }
+
+        function gameOver() {
+            if (!gameIsOver) {
+                gameIsOver = true;
+                waitingForRestart = true;
+                explosionSound.play().catch(e => console.log("Audio play failed", e));
+                ctx.font = "30px Arial";
+                ctx.fillStyle = "red";
+                ctx.textAlign = "center";
+                ctx.fillText("ゲームオーバー", canvas.width / 2, canvas.height / 2 - 30);
+                ctx.font = "20px Arial";
+                ctx.fillStyle = "white";
+                ctx.fillText("スコア: " + score, canvas.width / 2, canvas.height / 2 + 10);
+                ctx.fillText("スペースキーを押して再スタート", canvas.width / 2, canvas.height / 2 + 40);
+            }
+        }
+
+        function restartGame() {
+            gameIsOver = false;
+            waitingForRestart = false;
+            score = 0;
+            level = 1;
+            x = canvas.width / 2;
+            y = canvas.height - 30;
+            dx = 2;
+            dy = -2;
+            paddleX = (canvas.width - paddleWidth) / 2;
+            paddleWidth = 75;
+            resetBricks();
+            powerUp.status = 0;
+            updateScore();
+            draw();
+        }
+
+        function draw() {
+            if (gameIsOver) return;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            updateStars();
+            drawStars();
+            drawPlanet();
+            drawBricks();
+            drawBall();
+            drawPaddle();
+            drawPowerUp();
+            collisionDetection();
+
+            if(x + dx > canvas.width-ballRadius || x + dx < ballRadius) {
+                dx = -dx;
+            }
+            if(y + dy < ballRadius) {
+                dy = -dy;
+            }
+            else if(y + dy > canvas.height-ballRadius) {
+                if(x > paddleX && x < paddleX + paddleWidth) {
+                    dy = -dy;
+                    dx *= 1.1;
+                    dy *= 1.1;
+                    bounceSound.currentTime = 0;
+                    bounceSound.play().catch(e => console.log("Bounce sound play failed", e));
+                }
+                else {
+                    gameOver();
+                    return;
+                }
+            }
+
+            if(rightPressed && paddleX < canvas.width-paddleWidth) {
+                paddleX += 7;
+            }
+            else if(leftPressed && paddleX > 0) {
+                paddleX -= 7;
+            }
+
+            if(powerUp.status == 1) {
+                if(powerUp.y + 20 > canvas.height - paddleHeight && powerUp.x > paddleX && powerUp.x < paddleX + paddleWidth) {
+                    powerUp.status = 0;
+                    powerUpSound.play().catch(e => console.log("PowerUp sound play failed", e));
+                    if(powerUp.type == 0) {
+                        paddle

@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>シンプルボールゲーム - スペースキー待機</title>
+    <style>
+        canvas { background: #eee; display: block; margin: 0 auto; }
+        #score { text-align: center; font-size: 24px; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="480" height="320"></canvas>
+    <div id="score">スコア: 0</div>
+    <audio id="explosionSound" src="https://taira-komori.jpn.org/sound/arms01/small_explosion1.mp3"></audio>
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        let x = canvas.width / 2;
+        let y = canvas.height - 30;
+        let dx = 2;
+        let dy = -2;
+        const ballRadius = 10;
+        const paddleHeight = 10;
+        const paddleWidth = 75;
+        let paddleX = (canvas.width - paddleWidth) / 2;
+        let rightPressed = false;
+        let leftPressed = false;
+        let score = 0;
+        let gameIsOver = false;
+        let waitingForRestart = false;
+        const explosionSound = document.getElementById("explosionSound");
+
+        document.addEventListener("keydown", keyDownHandler, false);
+        document.addEventListener("keyup", keyUpHandler, false);
+
+        function keyDownHandler(e) {
+            if (e.key === "Right" || e.key === "ArrowRight") {
+                rightPressed = true;
+            } else if (e.key === "Left" || e.key === "ArrowLeft") {
+                leftPressed = true;
+            } else if (e.key === " " && waitingForRestart) {
+                restartGame();
+            }
+        }
+
+        function keyUpHandler(e) {
+            if (e.key === "Right" || e.key === "ArrowRight") {
+                rightPressed = false;
+            } else if (e.key === "Left" || e.key === "ArrowLeft") {
+                leftPressed = false;
+            }
+        }
+
+        function drawBall() {
+            ctx.beginPath();
+            ctx.arc(x, y, ballRadius, 0, Math.PI * 2);
+            ctx.fillStyle = "red";
+            ctx.fill();
+            ctx.closePath();
+        }
+
+        function drawPaddle() {
+            ctx.beginPath();
+            ctx.rect(paddleX, canvas.height - paddleHeight, paddleWidth, paddleHeight);
+            ctx.fillStyle = "#0095DD";
+            ctx.fill();
+            ctx.closePath();
+        }
+
+        function updateScore() {
+            document.getElementById("score").innerHTML = "スコア: " + score;
+        }
+
+        function gameOver() {
+            if (!gameIsOver) {
+                gameIsOver = true;
+                waitingForRestart = true;
+                explosionSound.play();
+                ctx.font = "30px Arial";
+                ctx.fillStyle = "red";
+                ctx.textAlign = "center";
+                ctx.fillText("ゲームオーバー", canvas.width / 2, canvas.height / 2 - 30);
+                ctx.font = "20px Arial";
+                ctx.fillStyle = "black";
+                ctx.fillText("スコア: " + score, canvas.width / 2, canvas.height / 2 + 10);
+                ctx.fillText("スペースキーを押して再スタート", canvas.width / 2, canvas.height / 2 + 40);
+            }
+        }
+
+        function restartGame() {
+            gameIsOver = false;
+            waitingForRestart = false;
+            score = 0;
+            x = canvas.width / 2;
+            y = canvas.height - 30;
+            dx = 2;
+            dy = -2;
+            paddleX = (canvas.width - paddleWidth) / 2;
+            updateScore();
+            draw();
+        }
+
+        function draw() {
+            if (gameIsOver) return;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawBall();
+            drawPaddle();
+
+            if (x + dx > canvas.width - ballRadius || x + dx < ballRadius) {
+                dx = -dx;
+            }
+            if (y + dy < ballRadius) {
+                dy = -dy;
+            } else if (y + dy > canvas.height - ballRadius) {
+                if (x > paddleX && x < paddleX + paddleWidth) {
+                    dy = -dy;
+                    score += 10;
+                    updateScore();
+                } else {
+                    gameOver();
+                    return;
+                }
+            }
+
+            if (rightPressed && paddleX < canvas.width - paddleWidth) {
+                paddleX += 7;
+            } else if (leftPressed && paddleX > 0) {
+                paddleX -= 7;
+            }
+
+            x += dx;
+            y += dy;
+            requestAnimationFrame(draw);
+        }
+
+        draw();
+    </script>
+</body>
+</html>

@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>拡張ボールゲーム - 縦長画面</title>
+    <style>
+        canvas { background: #eee; display: block; margin: 0 auto; }
+        #score, #highScore { text-align: center; font-size: 24px; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="480" height="640"></canvas>
+    <div id="score">スコア: 0</div>
+    <div id="highScore">ハイスコア: 0</div>
+    <audio id="explosionSound" src="https://taira-komori.jpn.org/sound/arms01/small_explosion1.mp3"></audio>
+    <audio id="bounceSound" src="https://taira-komori.jpn.org/sound/arms01/laser_beam1.mp3"></audio>
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        let x = canvas.width / 2;
+        let y = canvas.height - 30;
+        let dx = 2;
+        let dy = -2;
+        const ballRadius = 10;
+        let paddleHeight = 10;
+        let paddleWidth = 75;
+        let paddleX = (canvas.width - paddleWidth) / 2;
+        let rightPressed = false;
+        let leftPressed = false;
+        let score = 0;
+        let highScore = 0;
+        let gameIsOver = false;
+        let waitingForRestart = false;
+        const explosionSound = document.getElementById("explosionSound");
+        const bounceSound = document.getElementById("bounceSound");
+
+        // ブロックの設定
+        const brickRowCount = 5;  // 行数を増やす
+        const brickColumnCount = 5;
+        const brickWidth = 75;
+        const brickHeight = 20;
+        const brickPadding = 10;
+        const brickOffsetTop = 30;
+        const brickOffsetLeft = 30;
+
+        const bricks = [];
+        for(let c=0; c<brickColumnCount; c++) {
+            bricks[c] = [];
+            for(let r=0; r<brickRowCount; r++) {
+                bricks[c][r] = { x: 0, y: 0, status: 1 };
+            }
+        }
+
+        // パワーアップアイテム
+        let powerUp = { x: 0, y: 0, status: 0 };
+
+        document.addEventListener("keydown", keyDownHandler, false);
+        document.addEventListener("keyup", keyUpHandler, false);
+
+        function keyDownHandler(e) {
+            if (e.key === "Right" || e.key === "ArrowRight") {
+                rightPressed = true;
+            } else if (e.key === "Left" || e.key === "ArrowLeft") {
+                leftPressed = true;
+            } else if (e.key === " " && waitingForRestart) {
+                restartGame();
+            }
+        }
+
+        function keyUpHandler(e) {
+            if (e.key === "Right" || e.key === "ArrowRight") {
+                rightPressed = false;
+            } else if (e.key === "Left" || e.key === "ArrowLeft") {
+                leftPressed = false;
+            }
+        }
+
+        function drawBall() {
+            ctx.beginPath();
+            ctx.arc(x, y, ballRadius, 0, Math.PI * 2);
+            ctx.fillStyle = "red";
+            ctx.fill();
+            ctx.closePath();
+        }
+
+        function drawPaddle() {
+            ctx.beginPath();
+            ctx.rect(paddleX, canvas.height - paddleHeight, paddleWidth, paddleHeight);
+            ctx.fillStyle = "#0095DD";
+            ctx.fill();
+            ctx.closePath();
+        }
+
+        function drawBricks() {
+            for(let c=0; c<brickColumnCount; c++) {
+                for(let r=0; r<brickRowCount; r++) {
+                    if(bricks[c][r].status == 1) {
+                        const brickX = (c*(brickWidth+brickPadding))+brickOffsetLeft;
+                        const brickY = (r*(brickHeight+brickPadding))+brickOffsetTop;
+                        bricks[c][r].x = brickX;
+                        bricks[c][r].y = brickY;
+                        ctx.beginPath();
+                        ctx.rect(brickX, brickY, brickWidth, brickHeight);
+                        ctx.fillStyle = "#0095DD";
+                        ctx.fill();
+                        ctx.closePath();
+                    }
+                }
+            }
+        }
+
+        function drawPowerUp() {
+            if(powerUp.status == 1) {
+                ctx.beginPath();
+                ctx.rect(powerUp.x, powerUp.y, 20, 20);
+                ctx.fillStyle = "green";
+                ctx.fill();
+                ctx.closePath();
+            }
+        }
+
+        function updateScore() {
+            document.getElementById("score").innerHTML = "スコア: " + score;
+            document.getElementById("highScore").innerHTML = "ハイスコア: " + highScore;
+        }
+
+        function collisionDetection() {
+            for(let c=0; c<brickColumnCount; c++) {
+                for(let r=0; r<brickRowCount; r++) {
+                    const b = bricks[c][r];
+                    if(b.status == 1) {
+                        if(x > b.x && x < b.x+brickWidth && y > b.y && y < b.y+brickHeight) {
+                            dy = -dy;
+                            b.status = 0;
+                            score += 10;
+                            if(score > highScore) {
+                                highScore = score;
+                            }
+                            updateScore();
+                            if(Math.random() < 0.1) {  // 10%の確率でパワーアップアイテムを出現
+                                powerUp.x = b.x;
+                                powerUp.y = b.y;
+                                powerUp.status = 1;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        function gameOver() {
+            if (!gameIsOver) {
+                gameIsOver = true;
+                waitingForRestart = true;
+                explosionSound.play().catch(e => console.log("Audio play failed", e));
+                ctx.font = "30px Arial";
+                ctx.fillStyle = "red";
+                ctx.textAlign = "center";
+                ctx.fillText("ゲームオーバー", canvas.width / 2, canvas.height / 2 - 30);
+                ctx.font = "20px Arial";
+                ctx.fillStyle = "black";
+                ctx.fillText("スコア: " + score, canvas.width / 2, canvas.height / 2 + 10);
+                ctx.fillText("スペースキーを押して再スタート", canvas.width / 2, canvas.height / 2 + 40);
+            }
+        }
+
+        function restartGame() {
+            gameIsOver = false;
+            waitingForRestart = false;
+            score = 0;
+            x = canvas.width / 2;
+            y = canvas.height - 30;
+            dx = 2;
+            dy = -2;
+            paddleX = (canvas.width - paddleWidth) / 2;
+            paddleWidth = 75;  // パドルのサイズをリセット
+            for(let c=0; c<brickColumnCount; c++) {
+                for(let r=0; r<brickRowCount; r++) {
+                    bricks[c][r].status = 1;
+                }
+            }
+            powerUp.status = 0;
+            updateScore();
+            draw();
+        }
+
+        function draw() {
+            if (gameIsOver) return;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawBricks();
+            drawBall();
+            drawPaddle();
+            drawPowerUp();
+            collisionDetection();
+
+            if(x + dx > canvas.width-ballRadius || x + dx < ballRadius) {
+                dx = -dx;
+            }
+            if(y + dy < ballRadius) {
+                dy = -dy;
+            }
+            else if(y + dy > canvas.height-ballRadius) {
+                if(x > paddleX && x < paddleX + paddleWidth) {
+                    dy = -dy;
+                    dx *= 1.1;  // ボールの速度を少し上げる
+                    dy *= 1.1;
+                    bounceSound.currentTime = 0;  // 音声を最初から再生
+                    bounceSound.play().catch(e => console.log("Bounce sound play failed", e));
+                }
+                else {
+                    gameOver();
+                    return;
+                }
+            }
+
+            if(rightPressed && paddleX < canvas.width-paddleWidth) {
+                paddleX += 7;
+            }
+            else if(leftPressed && paddleX > 0) {
+                paddleX -= 7;
+            }
+
+            // パワーアップアイテムとの衝突判定
+            if(powerUp.status == 1) {
+                if(powerUp.y + 20 > canvas.height - paddleHeight && powerUp.x > paddleX && powerUp.x < paddleX + paddleWidth) {
+                    powerUp.status = 0;
+                    paddleWidth *= 1.5;  // パドルを1.5倍に大きくする
+                    setTimeout(() => paddleWidth /= 1.5, 10000);  // 10秒後に元のサイズに戻す
+                }
+                powerUp.y += 2;  // パワーアップアイテムを下に移動
+            }
+
+            x += dx;
+            y += dy;
+            requestAnimationFrame(draw);
+        }
+
+        updateScore();
+        draw();
+    </script>
+</body>
+</html>

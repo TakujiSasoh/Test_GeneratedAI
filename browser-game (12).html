@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>宇宙テーマボールゲーム</title>
+    <style>
+        body {
+            background-color: #000;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+        #gameCanvas {
+            background-image: url('https://sozaino.site/wp-content/uploads/2021/02/utyuu-1536x864.jpg');
+            background-size: cover;
+            background-position: center;
+            display: block;
+            margin: 20px auto;
+        }
+        #score, #highScore, #level {
+            text-align: center;
+            font-size: 24px;
+            margin-top: 10px;
+            color: white;
+        }
+        #titleScreen {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 20px;
+            border-radius: 10px;
+        }
+        #titleScreen h1 {
+            font-size: 36px;
+            margin-bottom: 20px;
+        }
+        #levelSelect {
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+        #startButton {
+            font-size: 24px;
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="480" height="640"></canvas>
+    <div id="score">スコア: 0</div>
+    <div id="highScore">ハイスコア: 0</div>
+    <div id="level">レベル: 1</div>
+    <div id="titleScreen">
+        <h1>宇宙テーマボールゲーム</h1>
+        <select id="levelSelect">
+            <option value="1">レベル 1</option>
+            <option value="2">レベル 2</option>
+            <option value="3">レベル 3</option>
+            <option value="4">レベル 4</option>
+            <option value="5">レベル 5</option>
+        </select>
+        <br>
+        <button id="startButton">ゲームスタート</button>
+    </div>
+    <audio id="bounceSound" src="https://taira-komori.jpn.org/sound/sf/mp3/laser1.mp3"></audio>
+    <audio id="bgm" src="https://soundimage.org/wp-content/uploads/2020/03/Orbital-Romance.mp3" loop></audio>
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        let x = canvas.width / 2;
+        let y = canvas.height - 30;
+        let dx = 2;
+        let dy = -2;
+        const ballRadius = 10;
+        let paddleHeight = 20;
+        let paddleWidth = 75;
+        let paddleX = (canvas.width - paddleWidth) / 2;
+        let rightPressed = false;
+        let leftPressed = false;
+        let score = 0;
+        let highScore = 0;
+        let level = 1;
+        let gameIsOver = false;
+        let gameStarted = false;
+        const bounceSound = document.getElementById("bounceSound");
+        const bgm = document.getElementById("bgm");
+        const titleScreen = document.getElementById("titleScreen");
+        const startButton = document.getElementById("startButton");
+        const levelSelect = document.getElementById("levelSelect");
+
+        // ブロックの設定
+        const brickRowCount = 5;
+        const brickColumnCount = 5;
+        const brickWidth = 75;
+        const brickHeight = 20;
+        const brickPadding = 10;
+        const brickOffsetTop = 30;
+        const brickOffsetLeft = 30;
+
+        let bricks = [];
+
+        function resetBricks() {
+            bricks = [];
+            for(let c=0; c<brickColumnCount; c++) {
+                bricks[c] = [];
+                for(let r=0; r<brickRowCount; r++) {
+                    bricks[c][r] = { x: 0, y: 0, status: 1 };
+                }
+            }
+        }
+
+        function setInitialBallSpeed() {
+            const baseSpeed = 2;
+            const speedIncrease = 0.5;
+            const speed = baseSpeed + (level - 1) * speedIncrease;
+            dx = speed;
+            dy = -speed;
+        }
+
+        function playBGM() {
+            bgm.play().catch(e => console.log("BGM play failed", e));
+        }
+
+        function stopBGM() {
+            bgm.pause();
+            bgm.currentTime = 0;
+        }
+
+        resetBricks();
+
+        document.addEventListener("keydown", keyDownHandler, false);
+        document.addEventListener("keyup", keyUpHandler, false);
+        startButton.addEventListener("click", startGame, false);
+
+        function startGame() {
+            gameStarted = true;
+            gameIsOver = false;
+            level = parseInt(levelSelect.value);
+            titleScreen.style.display = "none";
+            resetGame();
+            setInitialBallSpeed();
+            playBGM();
+            draw();
+        }
+
+        function keyDownHandler(e) {
+            if (e.key === "Right" || e.key === "ArrowRight") {
+                rightPressed = true;
+            } else if (e.key === "Left" || e.key === "ArrowLeft") {
+                leftPressed = true;
+            } else if (e.key === " " && gameIsOver) {
+                returnToTitle();
+            }
+        }
+
+        function keyUpHandler(e) {
+            if (e.key === "Right" || e.key === "ArrowRight") {
+                rightPressed = false;
+            } else if (e.key === "Left" || e.key === "ArrowLeft") {
+                leftPressed = false;
+            }
+        }
+
+        function drawBall() {
+            ctx.beginPath();
+            ctx.arc(x, y, ballRadius, 0, Math.PI * 2);
+            ctx.fillStyle = "#A9A9A9";
+            ctx.fill();
+            ctx.closePath();
+        }
+
+        function drawPaddle() {
+            ctx.beginPath();
+            ctx.rect(paddleX, canvas.height - paddleHeight, paddleWidth, paddleHeight);
+            ctx.fillStyle = "#0095DD";
+            ctx.fill();
+            ctx.closePath();
+        }
+
+        function drawBricks() {
+            for(let c=0; c<brickColumnCount; c++) {
+                for(let r=0; r<brickRowCount; r++) {
+                    if(bricks[c][r].status == 1) {
+                        const brickX = (c*(brickWidth+brickPadding))+brickOffsetLeft;
+                        const brickY = (r*(brickHeight+brickPadding))+brickOffsetTop;
+                        bricks[c][r].x = brickX;
+                        bricks[c][r].y = brickY;
+                        ctx.beginPath();
+                        ctx.rect(brickX, brickY, brickWidth, brickHeight);
+                        ctx.fillStyle = "#8B4513";
+                        ctx.fill();
+                        ctx.closePath();
+                    }
+                }
+            }
+        }
+
+        function updateScore() {
+            document.getElementById("score").innerHTML = "スコア: " + score;
+            document.getElementById("highScore").innerHTML = "ハイスコア: " + highScore;
+            document.getElementById("level").innerHTML = "レベル: " + level;
+        }
+
+        function collisionDetection() {
+            for(let c=0; c<brickColumnCount; c++) {
+                for(let r=0; r<brickRowCount; r++) {
+                    const b = bricks[c][r];
+                    if(b.status == 1) {
+                        if(x > b.x && x < b.x+brickWidth && y > b.y && y < b.y+brickHeight) {
+                            dy = -dy;
+                            b.status = 0;
+                            score += 10;
+                            if(score > highScore) {
+                                highScore = score;
+                            }
+                            updateScore();
+                            if(score % 50 == 0) {
+                                level++;
+                                if(level <= 5) {
+                                    resetBricks();
+                                    setInitialBallSpeed();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        function gameOver() {
+            gameIsOver = true;
+            stopBGM();
+            ctx.font = "30px Arial";
+            ctx.fillStyle = "red";
+            ctx.textAlign = "center";
+            ctx.fillText("ゲームオーバー", canvas.width / 2, canvas.height / 2 - 30);
+            ctx.font = "20px Arial";
+            ctx.fillStyle = "white";
+            ctx.fillText("スコア: " + score, canvas.width / 2, canvas.height / 2 + 10);
+            ctx.fillText("スペースキーでタイトルに戻る", canvas.width / 2, canvas.height / 2 + 40);
+        }
+
+        function returnToTitle() {
+            gameStarted = false;
+            gameIsOver = false;
+            titleScreen.style.display = "block";
+            stopBGM();
+            resetGame();
+        }
+
+        function resetGame() {
+            score = 0;
+            x = canvas.width / 2;
+            y = canvas.height - 30;
+            paddleX = (canvas.width - paddleWidth) / 2;
+            resetBricks();
+            updateScore();
+        }
+
+        function draw() {
+            if (!gameStarted || gameIsOver) return;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawBricks();
+            drawBall();
+            drawPaddle();
+            collisionDetection();
+
+            if(x + dx > canvas.width-ballRadius || x + dx < ballRadius) {
+                dx = -dx;
+            }
+            if(y + dy < ballRadius) {
+                dy = -dy;
+            }
+            else if(y + dy > canvas.height-ballRadius) {
+                if(x > paddleX && x < paddleX + paddleWidth) {
+                    dy = -dy;
+                    bounceSound.currentTime = 0;
+                    bounceSound.play().catch(e => console.log("Bounce sound play failed", e));
+                }
+                else {
+                    gameOver();
+                    return;
+                }
+            }
+
+            if(rightPressed && paddleX < canvas.width-paddleWidth) {
+                paddleX += 7;
+            }
+            else if(leftPressed && paddleX > 0) {
+                paddleX -= 7;
+            }
+
+            x += dx;
+            y += dy;
+            requestAnimationFrame(draw);
+        }
+
+        updateScore();
+    </script>
+</body>
+</html>

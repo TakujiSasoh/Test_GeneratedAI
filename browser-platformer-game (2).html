@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>スクロール機能付きブラウザ横スクロールアクションゲーム</title>
+    <style>
+        canvas { border: 1px solid black; }
+        #score { font-size: 20px; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="800" height="400"></canvas>
+    <div id="score">スコア: 0</div>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+
+        let score = 0;
+        let gameOver = false;
+        let scrollOffset = 0;
+
+        const player = {
+            x: canvas.width / 2, y: 200, width: 32, height: 32,
+            speed: 5, jumpForce: 10, velocity: 0, isJumping: false
+        };
+
+        const ground = { y: 350, height: 50 };
+
+        let obstacles = [];
+
+        const keys = {};
+
+        function generateObstacle() {
+            const height = Math.random() * 100 + 50;
+            return {
+                x: canvas.width + scrollOffset,
+                y: ground.y - height,
+                width: 30,
+                height: height
+            };
+        }
+
+        function gameLoop() {
+            if (gameOver) return;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // スクロールの更新
+            scrollOffset += 2;
+
+            // プレイヤーの移動（左右の移動は制限）
+            if (keys.ArrowRight && player.x < canvas.width * 0.6) player.x += player.speed;
+            if (keys.ArrowLeft && player.x > canvas.width * 0.4) player.x -= player.speed;
+            if (keys.Space && !player.isJumping) {
+                player.velocity = -player.jumpForce;
+                player.isJumping = true;
+            }
+
+            // 重力の適用
+            player.velocity += 0.5;
+            player.y += player.velocity;
+
+            // 地面との衝突判定
+            if (player.y + player.height > ground.y) {
+                player.y = ground.y - player.height;
+                player.velocity = 0;
+                player.isJumping = false;
+            }
+
+            // 障害物の生成と更新
+            if (Math.random() < 0.02) {
+                obstacles.push(generateObstacle());
+            }
+
+            obstacles = obstacles.filter(obstacle => {
+                obstacle.x -= 2; // スクロール速度に合わせて移動
+                return obstacle.x + obstacle.width > 0;
+            });
+
+            // 障害物との衝突判定
+            if (obstacles.some(obstacle => checkCollision(player, obstacle))) {
+                gameOver = true;
+            }
+
+            // 描画
+            ctx.save();
+            ctx.translate(-scrollOffset, 0);
+
+            ctx.fillStyle = 'red';
+            ctx.fillRect(player.x + scrollOffset, player.y, player.width, player.height);
+
+            ctx.fillStyle = 'green';
+            ctx.fillRect(scrollOffset, ground.y, canvas.width, ground.height);
+
+            ctx.fillStyle = 'brown';
+            obstacles.forEach(obstacle => {
+                ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+            });
+
+            ctx.restore();
+
+            // スコアの更新
+            score = Math.floor(scrollOffset / 10);
+            scoreElement.textContent = `スコア: ${score}`;
+
+            if (gameOver) {
+                ctx.fillStyle = 'black';
+                ctx.font = '30px Arial';
+                ctx.fillText('ゲームオーバー', canvas.width/2 - 80, canvas.height/2);
+            } else {
+                requestAnimationFrame(gameLoop);
+            }
+        }
+
+        function checkCollision(rect1, rect2) {
+            return rect1.x < rect2.x + rect2.width &&
+                   rect1.x + rect1.width > rect2.x &&
+                   rect1.y < rect2.y + rect2.height &&
+                   rect1.y + rect1.height > rect2.y;
+        }
+
+        window.addEventListener('keydown', (e) => { keys[e.code] = true; });
+        window.addEventListener('keyup', (e) => { keys[e.code] = false; });
+
+        gameLoop();
+    </script>
+</body>
+</html>
